@@ -1,4 +1,8 @@
 import React from "react";
+<<<<<<< HEAD
+=======
+import GoldfishState from "./Context/GoldfishState";
+>>>>>>> Phase-1
 import {
 	BrowserRouter as Router,
 	Routes,
@@ -11,6 +15,7 @@ import "./App.css";
 
 function App() {
 	return (
+<<<<<<< HEAD
 		<Router>
 			<Routes>
 				<Route path="/login" element={<Login />} />
@@ -19,6 +24,17 @@ function App() {
 				<Route path="*" element={<Navigate to="/login" replace />} />
 			</Routes>
 		</Router>
+=======
+		<GoldfishState>
+			<Router>
+				<Routes>
+					<Route path="/login" element={<Login />} />
+					<Route path="/signup" element={<Signup />} />
+					<Route path="*" element={<Navigate to="/login" replace />} />
+				</Routes>
+			</Router>
+		</GoldfishState>
+>>>>>>> Phase-1
 	);
 }
 
