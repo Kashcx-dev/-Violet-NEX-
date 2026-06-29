@@ -1,4 +1,5 @@
 import React from "react";
+import GoldfishState from "./Context/GoldfishState";
 import {
 	BrowserRouter as Router,
 	Routes,
@@ -11,14 +12,15 @@ import "./App.css";
 
 function App() {
 	return (
-		<Router>
-			<Routes>
-				<Route path="/login" element={<Login />} />
-				<Route path="/signup" element={<Signup />} />
-				{/* Redirect to login by default */}
-				<Route path="*" element={<Navigate to="/login" replace />} />
-			</Routes>
-		</Router>
+		<GoldfishState>
+			<Router>
+				<Routes>
+					<Route path="/login" element={<Login />} />
+					<Route path="/signup" element={<Signup />} />
+					<Route path="*" element={<Navigate to="/login" replace />} />
+				</Routes>
+			</Router>
+		</GoldfishState>
 	);
 }
 
