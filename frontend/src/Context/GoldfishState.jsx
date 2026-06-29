@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import goldfishContext from "./goldFishContext";
 
 function GoldfishState(props) {
-	const host = import.meta.env.BACKEND_HOST || "http://localhost:5000";
+	const host = import.meta.env.BACKEND_HOST || "http://localhost:8000";
 	const [user, setUser] = useState(null);
 	const [loading, setLoading] = useState(false);
 
