@@ -26,7 +26,9 @@ router.post(
 	async (req, res) => {
 		const errors = validationResult(req);
 		if (!errors.isEmpty()) {
-			return res.status(400).json({ success: false, errors: errors.array() });
+			return res
+				.status(400)
+				.json({ success: false, errors: errors.array() });
 		}
 
 		const { name, email, password } = req.body;
@@ -55,13 +57,13 @@ router.post(
 				email,
 				password_hash: securedPassword,
 				code: otp,
-				expiresAt
+				expiresAt,
 			});
 
 			await sendEmail(
 				email,
 				"Verify Your GoldFish Account",
-				`Your verification OTP is: ${otp}. Valid for 5 minutes.`
+				`Your verification OTP is: ${otp}. Valid for 5 minutes.`,
 			);
 
 			res.status(200).json({
@@ -80,12 +82,17 @@ router.post("/verify-signup-otp", async (req, res) => {
 	const record = signupStore.get(email);
 
 	if (!record) {
-		return res.status(400).json({ success: false, error: "No signup session found or expired." });
+		return res.status(400).json({
+			success: false,
+			error: "No signup session found or expired.",
+		});
 	}
 
 	if (Date.now() > record.expiresAt) {
 		signupStore.delete(email);
-		return res.status(400).json({ success: false, error: "OTP expired. Please signup again." });
+		return res
+			.status(400)
+			.json({ success: false, error: "OTP expired. Please signup again." });
 	}
 
 	if (record.code === otp) {
@@ -112,7 +119,9 @@ router.post("/verify-signup-otp", async (req, res) => {
 				},
 			});
 		} catch (error) {
-			return res.status(500).json({ success: false, message: error.message });
+			return res
+				.status(500)
+				.json({ success: false, message: error.message });
 		}
 	}
 
@@ -128,7 +137,9 @@ router.post(
 	async (req, res) => {
 		const errors = validationResult(req);
 		if (!errors.isEmpty()) {
-			return res.status(400).json({ success: false, errors: errors.array() });
+			return res
+				.status(400)
+				.json({ success: false, errors: errors.array() });
 		}
 
 		const { email, password } = req.body;
@@ -140,7 +151,9 @@ router.post(
 			);
 
 			if (userResult.rows.length === 0) {
-				return res.status(400).json({ success: false, error: "Invalid credentials" });
+				return res
+					.status(400)
+					.json({ success: false, error: "Invalid credentials" });
 			}
 
 			const user = userResult.rows[0];
@@ -150,7 +163,9 @@ router.post(
 				user.password_hash,
 			);
 			if (!isPasswordValid) {
-				return res.status(400).json({ success: false, error: "Invalid credentials" });
+				return res
+					.status(400)
+					.json({ success: false, error: "Invalid credentials" });
 			}
 
 			const otp = generateOTP();
@@ -159,13 +174,13 @@ router.post(
 			otpStore.set(email, {
 				user,
 				code: otp,
-				expiresAt
+				expiresAt,
 			});
 
 			await sendEmail(
 				email,
 				"Your GoldFish Login OTP",
-				`Your OTP for login is: ${otp}. Valid for 5 minutes.`
+				`Your OTP for login is: ${otp}. Valid for 5 minutes.`,
 			);
 
 			res.json({
@@ -184,12 +199,16 @@ router.post("/verify-otp", async (req, res) => {
 	const record = otpStore.get(email);
 
 	if (!record) {
-		return res.status(400).json({ success: false, error: "No login session found or expired." });
+		return res
+			.status(400)
+			.json({ success: false, error: "No login session found or expired." });
 	}
 
 	if (Date.now() > record.expiresAt) {
 		otpStore.delete(email);
-		return res.status(400).json({ success: false, error: "OTP expired. Please login again." });
+		return res
+			.status(400)
+			.json({ success: false, error: "OTP expired. Please login again." });
 	}
 
 	if (record.code === otp) {
@@ -213,6 +232,42 @@ router.post("/verify-otp", async (req, res) => {
 	}
 
 	res.status(400).json({ success: false, error: "Invalid OTP" });
+});
+
+// Middleware to fetch user from JWT token
+const fetchuser = (req, res, next) => {
+	const token =
+		req.header("auth-token") ||
+		req.header("Authorization")?.replace("Bearer ", "");
+	if (!token) {
+		return res
+			.status(401)
+			.send({ error: "Please authenticate using a valid token" });
+	}
+	try {
+		const data = jwt.verify(token, JWT_SECRET);
+		req.user = data;
+		next();
+	} catch (error) {
+		res.status(401).send({
+			error: "Please authenticate using a valid token",
+		});
+	}
+};
+
+// Route to get details of logged-in user: GET "/api/auth/getuser"
+router.get("/getuser", fetchuser, async (req, res) => {
+	try {
+		const userId = req.user.id;
+		const user = await pool.query(
+			"SELECT id, name, email, created_at FROM users WHERE id = $1",
+			[userId],
+		);
+		res.json({ success: true, user: user.rows[0] });
+	} catch (error) {
+		console.error(error.message);
+		res.status(500).json({ success: false, error: "Internal Server Error" });
+	}
 });
 
 export default router;

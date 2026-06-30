@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import goldfishContext from "./goldFishContext";
 
 function GoldfishState(props) {
-	const host = import.meta.env.BACKEND_HOST || "http://localhost:8000";
+	const host = import.meta.env.VITE_BACKEND_HOST || "http://localhost:3000";
 	const [user, setUser] = useState(null);
 	const [loading, setLoading] = useState(false);
 
@@ -25,12 +25,19 @@ function GoldfishState(props) {
 				setUser(data.user);
 				return { success: true, requires2FA: false };
 			} else {
-				const errorMsg = data.errors && data.errors.length > 0 ? data.errors[0].msg : data.error || "Login failed";
+				const errorMsg =
+					data.errors && data.errors.length > 0
+						? data.errors[0].msg
+						: data.error || "Login failed";
 				return { success: false, error: errorMsg };
 			}
+			//eslint-disable-next-line
 		} catch (error) {
 			setLoading(false);
-			return { success: false, error: "Something went wrong. Please try again." };
+			return {
+				success: false,
+				error: "Something went wrong. Please try again.",
+			};
 		}
 	};
 
@@ -50,8 +57,12 @@ function GoldfishState(props) {
 				setUser(data.user);
 				return { success: true };
 			} else {
-				return { success: false, error: data.error || "Verification failed" };
+				return {
+					success: false,
+					error: data.error || "Verification failed",
+				};
 			}
+			//eslint-disable-next-line
 		} catch (error) {
 			setLoading(false);
 			return { success: false, error: "Something went wrong." };
@@ -77,9 +88,13 @@ function GoldfishState(props) {
 				setUser(data.user);
 				return { success: true, requires2FA: false };
 			} else {
-				const errorMsg = data.errors && data.errors.length > 0 ? data.errors[0].msg : data.error || "Signup failed";
+				const errorMsg =
+					data.errors && data.errors.length > 0
+						? data.errors[0].msg
+						: data.error || "Signup failed";
 				return { success: false, error: errorMsg };
 			}
+			//eslint-disable-next-line
 		} catch (error) {
 			setLoading(false);
 			return { success: false, error: "Something went wrong." };
@@ -102,13 +117,40 @@ function GoldfishState(props) {
 				setUser(data.user);
 				return { success: true };
 			} else {
-				return { success: false, error: data.error || "Verification failed" };
+				return {
+					success: false,
+					error: data.error || "Verification failed",
+				};
 			}
+			//eslint-disable-next-line
 		} catch (error) {
 			setLoading(false);
 			return { success: false, error: "Something went wrong." };
 		}
 	};
+
+	const getUser = async () => {
+		const token = localStorage.getItem("token");
+		if (!token) return;
+		try {
+			const response = await fetch(`${host}/api/auth/getuser`, {
+				method: "GET",
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
+			});
+			const data = await response.json();
+			if (data.success) {
+				setUser(data.user);
+			}
+		} catch (error) {
+			console.error("Failed to fetch user:", error);
+		}
+	};
+
+	// useEffect(() => {
+	// 	getUser();
+	// }, []);
 
 	const logout = () => {
 		localStorage.removeItem("token");
@@ -116,7 +158,18 @@ function GoldfishState(props) {
 	};
 
 	return (
-		<goldfishContext.Provider value={{ user, loading, login, signup, verifyLoginOtp, verifySignupOtp, logout }}>
+		<goldfishContext.Provider
+			value={{
+				user,
+				loading,
+				login,
+				signup,
+				verifyLoginOtp,
+				verifySignupOtp,
+				getUser,
+				logout,
+			}}
+		>
 			{props.children}
 		</goldfishContext.Provider>
 	);
