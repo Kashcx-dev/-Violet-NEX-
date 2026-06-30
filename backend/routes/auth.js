@@ -2,10 +2,19 @@ import express from "express";
 import { body, validationResult } from "express-validator";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import pool from "../db.js";
+import crypto from "crypto";
+import pool from "../middlewares/db.js";
+import { sendEmail } from "../helper/Mailing.js";
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
+
+// In-memory stores for OTPs (MVP phase)
+const otpStore = new Map();
+const signupStore = new Map();
+
+// Generate 6-digit OTP
+const generateOTP = () => crypto.randomInt(100000, 999999).toString();
 
 router.post(
 	"/signup",
@@ -15,20 +24,12 @@ router.post(
 		body("password", "Password must be of 8 characters").isLength({ min: 8 }),
 	],
 	async (req, res) => {
-		let success = false;
 		const errors = validationResult(req);
-
 		if (!errors.isEmpty()) {
-			return res.status(400).json({ success, errors: errors.array() });
+			return res.status(400).json({ success: false, errors: errors.array() });
 		}
 
 		const { name, email, password } = req.body;
-
-		if (!name || !email || !password) {
-			return res
-				.status(400)
-				.json({ success, errors: "please fill all the fields" });
-		}
 
 		try {
 			const userExists = await pool.query(
@@ -39,25 +40,70 @@ router.post(
 			if (userExists.rows.length > 0) {
 				return res.status(400).json({
 					success: false,
-					error: "user with this email already exists",
+					error: "User with this email already exists",
 				});
 			}
 
 			const salt = await bcrypt.genSalt(10);
 			const securedPassword = await bcrypt.hash(password, salt);
 
+			const otp = generateOTP();
+			const expiresAt = Date.now() + 5 * 60 * 1000; // 5 mins
+
+			signupStore.set(email, {
+				name,
+				email,
+				password_hash: securedPassword,
+				code: otp,
+				expiresAt
+			});
+
+			await sendEmail(
+				email,
+				"Verify Your GoldFish Account",
+				`Your verification OTP is: ${otp}. Valid for 5 minutes.`
+			);
+
+			res.status(200).json({
+				success: true,
+				requires2FA: true,
+				message: "OTP sent to email",
+			});
+		} catch (error) {
+			res.status(500).json({ success: false, message: error.message });
+		}
+	},
+);
+
+router.post("/verify-signup-otp", async (req, res) => {
+	const { email, otp } = req.body;
+	const record = signupStore.get(email);
+
+	if (!record) {
+		return res.status(400).json({ success: false, error: "No signup session found or expired." });
+	}
+
+	if (Date.now() > record.expiresAt) {
+		signupStore.delete(email);
+		return res.status(400).json({ success: false, error: "OTP expired. Please signup again." });
+	}
+
+	if (record.code === otp) {
+		try {
 			const newUser = await pool.query(
 				"INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id, name, email, created_at",
-				[name, email, securedPassword],
+				[record.name, record.email, record.password_hash],
 			);
+
+			signupStore.delete(email);
 
 			const token = jwt.sign({ id: newUser.rows[0].id }, JWT_SECRET, {
 				expiresIn: "7d",
 			});
 
-			res.status(201).json({
+			return res.status(201).json({
 				success: true,
-				message: "signup successful",
+				message: "Signup successful",
 				token,
 				user: {
 					id: newUser.rows[0].id,
@@ -66,10 +112,12 @@ router.post(
 				},
 			});
 		} catch (error) {
-			res.status(500).json({ success: false, message: error.message });
+			return res.status(500).json({ success: false, message: error.message });
 		}
-	},
-);
+	}
+
+	res.status(400).json({ success: false, error: "Invalid OTP" });
+});
 
 router.post(
 	"/login",
@@ -78,10 +126,9 @@ router.post(
 		body("password", "Password can not be blank").exists(),
 	],
 	async (req, res) => {
-		let success = false;
 		const errors = validationResult(req);
 		if (!errors.isEmpty()) {
-			return res.status(400).json({ success, errors: errors.array() });
+			return res.status(400).json({ success: false, errors: errors.array() });
 		}
 
 		const { email, password } = req.body;
@@ -93,9 +140,7 @@ router.post(
 			);
 
 			if (userResult.rows.length === 0) {
-				return res
-					.status(400)
-					.json({ success, error: "invalid credentials" });
+				return res.status(400).json({ success: false, error: "Invalid credentials" });
 			}
 
 			const user = userResult.rows[0];
@@ -105,24 +150,28 @@ router.post(
 				user.password_hash,
 			);
 			if (!isPasswordValid) {
-				return res
-					.status(400)
-					.json({ success, error: "invalid credentials" });
+				return res.status(400).json({ success: false, error: "Invalid credentials" });
 			}
 
-			const token = jwt.sign({ id: user.id }, JWT_SECRET, {
-				expiresIn: "7d",
+			const otp = generateOTP();
+			const expiresAt = Date.now() + 5 * 60 * 1000;
+
+			otpStore.set(email, {
+				user,
+				code: otp,
+				expiresAt
 			});
+
+			await sendEmail(
+				email,
+				"Your GoldFish Login OTP",
+				`Your OTP for login is: ${otp}. Valid for 5 minutes.`
+			);
 
 			res.json({
 				success: true,
-				message: "login successful",
-				token,
-				user: {
-					id: user.id,
-					name: user.name,
-					email: user.email,
-				},
+				requires2FA: true,
+				message: "OTP sent to email",
 			});
 		} catch (error) {
 			res.status(500).json({ success: false, message: error.message });
@@ -130,12 +179,40 @@ router.post(
 	},
 );
 
-// router.get("/getuser", async (req,res) => {
-//     try {
+router.post("/verify-otp", async (req, res) => {
+	const { email, otp } = req.body;
+	const record = otpStore.get(email);
 
-//     } catch (error) {
+	if (!record) {
+		return res.status(400).json({ success: false, error: "No login session found or expired." });
+	}
 
-//     }
-// })
+	if (Date.now() > record.expiresAt) {
+		otpStore.delete(email);
+		return res.status(400).json({ success: false, error: "OTP expired. Please login again." });
+	}
+
+	if (record.code === otp) {
+		const user = record.user;
+		otpStore.delete(email);
+
+		const token = jwt.sign({ id: user.id }, JWT_SECRET, {
+			expiresIn: "7d",
+		});
+
+		return res.json({
+			success: true,
+			message: "Login successful",
+			token,
+			user: {
+				id: user.id,
+				name: user.name,
+				email: user.email,
+			},
+		});
+	}
+
+	res.status(400).json({ success: false, error: "Invalid OTP" });
+});
 
 export default router;
