@@ -47,7 +47,7 @@ function Login() {
 
 	return (
 		<div className="min-h-screen bg-[#09090b] text-[#f4f4f5] flex items-center justify-center p-4 selection:bg-white selection:text-black">
-			<div className="w-full max-w-md bg-[#18181b] border border-zinc-700 rounded-3xl p-8 shadow-2xl flex flex-col items-center">
+			<div className="w-full max-w-md bg-[#18181b] border border-zinc-700/50 rounded-3xl p-8 shadow-[0_0_80px_rgba(255,255,255,0.08)] flex flex-col items-center">
 				<div className="w-12 h-12 rounded-full bg-zinc-800/60 flex items-center justify-center mb-6 border border-zinc-700/50">
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -105,13 +105,13 @@ function Login() {
 								htmlFor="email"
 								className="text-xs font-medium text-zinc-400 tracking-wider block"
 							>
-								Email
+								Email or Username
 							</label>
 							<input
-								type="email"
+								type="text"
 								id="email"
 								name="email"
-								placeholder="Enter your email"
+								placeholder="Enter email or username"
 								value={formData.email}
 								onChange={handleChange}
 								className="w-full px-4 py-3 bg-[#242427]/50 border border-zinc-800 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 transition duration-200 text-sm"

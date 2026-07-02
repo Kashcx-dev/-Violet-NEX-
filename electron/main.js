@@ -22,7 +22,6 @@ function createWindow () {
   // In development, load from Vite dev server. In prod, load from dist.
   if (process.env.NODE_ENV === 'development') {
     win.loadURL('http://localhost:5174');
-    win.webContents.openDevTools();
   } else {
     win.loadFile(path.join(__dirname, 'dist', 'index.html'));
   }

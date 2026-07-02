@@ -62,7 +62,7 @@ function Signup() {
 
 	return (
 		<div className="min-h-screen bg-[#09090b] text-[#f4f4f5] flex items-center justify-center p-4 selection:bg-white selection:text-black">
-			<div className="w-full max-w-md bg-[#18181b] border border-zinc-700 rounded-3xl p-8 shadow-2xl flex flex-col items-center">
+			<div className="w-full max-w-md bg-[#18181b] border border-zinc-700/50 rounded-3xl p-8 shadow-[0_0_80px_rgba(255,255,255,0.08)] flex flex-col items-center">
 				<div className="w-12 h-12 rounded-full bg-zinc-800/60 flex items-center justify-center mb-6 border border-zinc-700/50">
 					<svg
 						xmlns="http://www.w3.org/2000/svg"

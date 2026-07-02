@@ -132,7 +132,7 @@ router.post("/verify-signup-otp", async (req, res) => {
 router.post(
 	"/login",
 	[
-		body("email", "Enter a valid mail").isEmail(),
+		body("email", "Enter a valid email or username").exists(),
 		body("password", "Password can not be blank").exists(),
 	],
 	async (req, res) => {
@@ -147,7 +147,7 @@ router.post(
 
 		try {
 			const userResult = await pool.query(
-				"SELECT * FROM users WHERE email = $1",
+				"SELECT * FROM users WHERE email = $1 OR name = $1",
 				[email],
 			);
 
