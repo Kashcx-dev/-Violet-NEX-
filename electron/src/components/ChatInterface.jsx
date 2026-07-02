@@ -29,33 +29,70 @@ function ChatInterface() {
 	};
 
 	const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-	const [chats, setChats] = useState([
-		{
-			id: "1",
-			title: "Design System Guidelines",
-			messages: [],
-			model: "gpt-4o",
-			workspaceDir: "",
-		},
-		{
-			id: "2",
-			title: "PostgreSQL Schema Setup",
-			messages: [],
-			model: "gpt-4o",
-			workspaceDir: "",
-		},
-		{
-			id: "3",
-			title: "Vite + Tailwind V4 Config",
-			messages: [],
-			model: "gpt-4o",
-			workspaceDir: "",
-		},
-	]);
+	const [chats, setChats] = useState([]);
 	const [activeChatId, setActiveChatId] = useState("1");
 	const [input, setInput] = useState("");
 	const [isGenerating, setIsGenerating] = useState(false);
 	const messagesEndRef = useRef(null);
+
+	// Fetch Chats on Load
+	useEffect(() => {
+		const loadChats = async () => {
+			const token = localStorage.getItem("token");
+			if (!token || !user) return;
+			try {
+				const res = await fetch("http://localhost:3000/api/chats", {
+					headers: { "auth-token": token }
+				});
+				const data = await res.json();
+				if (data.success && data.chats.length > 0) {
+					const formattedChats = data.chats.map(c => ({
+						id: c.id,
+						title: c.title,
+						model: c.model,
+						workspaceDir: c.workspace_dir || "",
+						messages: []
+					}));
+					setChats(formattedChats);
+					setActiveChatId(formattedChats[0].id);
+				} else {
+					handleNewChat();
+				}
+			} catch (error) {
+				console.error("Failed to load chats");
+			}
+		};
+		loadChats();
+		//eslint-disable-next-line
+	}, [user]);
+
+	// Fetch Messages when active chat changes
+	useEffect(() => {
+		const loadMessages = async () => {
+			const token = localStorage.getItem("token");
+			if (!token || !activeChatId) return;
+			
+			const targetChat = chats.find(c => c.id === activeChatId);
+			if (targetChat && targetChat.messages.length > 0) return; // already loaded
+
+			try {
+				const res = await fetch(`http://localhost:3000/api/chats/${activeChatId}/messages`, {
+					headers: { "auth-token": token }
+				});
+				const data = await res.json();
+				if (data.success) {
+					setChats(prev => prev.map(c => c.id === activeChatId ? {
+						...c,
+						messages: data.messages.map(m => ({ sender: m.sender, text: m.text, isComplete: true }))
+					} : c));
+				}
+			} catch (error) {
+				console.error("Failed to load messages");
+			}
+		};
+		loadMessages();
+		//eslint-disable-next-line
+	}, [activeChatId]);
 
 	// Setup WebSocket Connection
 	useEffect(() => {
@@ -71,24 +108,42 @@ function ChatInterface() {
 				if (data.type === "ack" || data.type === "connected") return;
 				
 				if (data.type === "chat_stream") {
-					setChats((prevChats) => {
-						const targetChatId = data.chatId; // Use the ID from the server
-						const targetChat = prevChats.find(c => c.id === targetChatId);
-						if (!targetChat) return prevChats;
+					setChats((prevChats) => prevChats.map(c => {
+						if (c.id !== data.chatId) return c;
 						
-						const lastMsg = targetChat.messages[targetChat.messages.length - 1];
+						const newMessages = [...c.messages];
+						const lastMsgIndex = newMessages.length - 1;
+						const lastMsg = newMessages[lastMsgIndex];
+						
 						if (lastMsg && lastMsg.sender === "ai" && !lastMsg.isComplete) {
-							lastMsg.text += data.chunk;
-							if (data.isLast) lastMsg.isComplete = true;
-							setIsGenerating(!data.isLast);
-							return [...prevChats];
-						} else {
-							return prevChats.map(c => c.id === targetChatId ? {
-								...c,
-								messages: [...c.messages, { sender: "ai", text: data.chunk, isComplete: !!data.isLast }]
-							} : c);
+							newMessages[lastMsgIndex] = {
+								...lastMsg,
+								text: lastMsg.text + data.chunk,
+								isComplete: !!data.isLast
+							};
+						} else if (lastMsg && lastMsg.sender === "user") {
+							newMessages.push({ sender: "ai", text: data.chunk, isComplete: !!data.isLast });
 						}
-					});
+						return { ...c, messages: newMessages };
+					}));
+					
+					if (data.isLast) setIsGenerating(false);
+				} else if (data.type === "error") {
+					setChats((prevChats) => prevChats.map(c => {
+						const newMessages = [...c.messages];
+						const lastMsgIndex = newMessages.length - 1;
+						const lastMsg = newMessages[lastMsgIndex];
+						
+						if (lastMsg && lastMsg.sender === "ai" && !lastMsg.isComplete) {
+							newMessages[lastMsgIndex] = {
+								...lastMsg,
+								text: "Error: " + data.message,
+								isComplete: true
+							};
+						}
+						return { ...c, messages: newMessages };
+					}));
+					setIsGenerating(false);
 				}
 			};
 
@@ -104,7 +159,7 @@ function ChatInterface() {
 				wsRef.current = null;
 			}
 		};
-	}, [user, activeChatId]);
+	}, [user]);
 
 	const activeChat = chats.find((c) => c.id === activeChatId) || chats[0];
 
@@ -122,25 +177,23 @@ function ChatInterface() {
 			return;
 		}
 
-		//Add user message
-		const updatedChats = chats.map((chat) => {
+		// Single state update for user message and AI placeholder
+		setChats(prevChats => prevChats.map(chat => {
 			if (chat.id === activeChatId) {
+				const newTitle = chat.messages.length === 0 ? messageText.substring(0, 30) + (messageText.length > 30 ? "..." : "") : chat.title;
 				return {
 					...chat,
-					title:
-						chat.messages.length === 0
-							? messageText.substring(0, 30) +
-								(messageText.length > 30 ? "..." : "")
-							: chat.title,
+					title: newTitle,
 					messages: [
 						...chat.messages,
-						{ sender: "user", text: messageText },
-					],
+						{ sender: "user", text: messageText, isComplete: true },
+						{ sender: "ai", text: "", isComplete: false }
+					]
 				};
 			}
 			return chat;
-		});
-		setChats(updatedChats);
+		}));
+		
 		setInput("");
 		setIsGenerating(true);
 
@@ -149,15 +202,9 @@ function ChatInterface() {
 			wsRef.current.send(JSON.stringify({ 
 				chatId: activeChatId,
 				text: messageText,
-				model: activeChat.model || "gpt-4o",
-				workspaceDir: activeChat.workspaceDir || "" 
+				model: activeChat?.model || "gpt-4o",
+				workspaceDir: activeChat?.workspaceDir || "" 
 			}));
-			
-			// Add placeholder AI message that will receive chunks
-			setChats((prev) => prev.map(chat => chat.id === activeChatId ? {
-				...chat,
-				messages: [...chat.messages, { sender: "ai", text: "", isComplete: false }]
-			} : chat));
 		} else {
 			// Fallback mock if disconnected
 			setTimeout(() => {
@@ -180,17 +227,30 @@ function ChatInterface() {
 		}
 	};
 
-	const handleNewChat = () => {
-		const newId = String(Date.now());
-		const newChat = {
-			id: newId,
-			title: "New Chat",
-			messages: [],
-			model: "gpt-4o",
-			workspaceDir: "",
-		};
-		setChats([newChat, ...chats]);
-		setActiveChatId(newId);
+	const handleNewChat = async () => {
+		const token = localStorage.getItem("token");
+		if (!token) return;
+		try {
+			const res = await fetch("http://localhost:3000/api/chats", {
+				method: "POST",
+				headers: { "Content-Type": "application/json", "auth-token": token },
+				body: JSON.stringify({ title: "New Chat", model: "gpt-4o" })
+			});
+			const data = await res.json();
+			if (data.success) {
+				const newChat = {
+					id: data.chat.id,
+					title: data.chat.title,
+					model: data.chat.model,
+					workspaceDir: data.chat.workspace_dir || "",
+					messages: []
+				};
+				setChats(prev => [newChat, ...prev]);
+				setActiveChatId(newChat.id);
+			}
+		} catch (error) {
+			console.error("Failed to create chat");
+		}
 	};
 
 	const handleDeleteChat = (idToDelete, e) => {
@@ -455,7 +515,7 @@ function ChatInterface() {
 
 				{/* Conversation Messages */}
 				<div className="flex-1 overflow-y-auto scrollbar-thin py-6 px-4 md:px-8 space-y-6">
-					{activeChat.messages.length === 0 ? (
+					{!activeChat || activeChat.messages.length === 0 ? (
 						// LANDING STATE (No messages)
 						<div className="h-full flex flex-col items-center justify-center max-w-2xl mx-auto text-center space-y-8 select-none py-12">
 							<div className="space-y-3">
