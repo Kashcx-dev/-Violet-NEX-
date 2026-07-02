@@ -35,6 +35,32 @@ function ChatInterface() {
 	const [isGenerating, setIsGenerating] = useState(false);
 	const messagesEndRef = useRef(null);
 
+	const handleNewChat = async () => {
+		const token = localStorage.getItem("token");
+		if (!token) return;
+		try {
+			const res = await fetch("http://localhost:3000/api/chats", {
+				method: "POST",
+				headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+				body: JSON.stringify({ title: "New Chat", model: "gpt-4o" })
+			});
+			const data = await res.json();
+			if (data.success) {
+				const newChat = {
+					id: data.chat.id,
+					title: data.chat.title,
+					model: data.chat.model,
+					workspaceDir: data.chat.workspace_dir || "",
+					messages: []
+				};
+				setChats(prev => [newChat, ...prev]);
+				setActiveChatId(newChat.id);
+			}
+		} catch (error) {
+			console.error("Failed to create chat");
+		}
+	};
+
 	// Fetch Chats on Load
 	useEffect(() => {
 		const loadChats = async () => {
@@ -42,7 +68,7 @@ function ChatInterface() {
 			if (!token || !user) return;
 			try {
 				const res = await fetch("http://localhost:3000/api/chats", {
-					headers: { "auth-token": token }
+					headers: { "Authorization": `Bearer ${token}` }
 				});
 				const data = await res.json();
 				if (data.success && data.chats.length > 0) {
@@ -77,7 +103,7 @@ function ChatInterface() {
 
 			try {
 				const res = await fetch(`http://localhost:3000/api/chats/${activeChatId}/messages`, {
-					headers: { "auth-token": token }
+					headers: { "Authorization": `Bearer ${token}` }
 				});
 				const data = await res.json();
 				if (data.success) {
@@ -227,31 +253,6 @@ function ChatInterface() {
 		}
 	};
 
-	const handleNewChat = async () => {
-		const token = localStorage.getItem("token");
-		if (!token) return;
-		try {
-			const res = await fetch("http://localhost:3000/api/chats", {
-				method: "POST",
-				headers: { "Content-Type": "application/json", "auth-token": token },
-				body: JSON.stringify({ title: "New Chat", model: "gpt-4o" })
-			});
-			const data = await res.json();
-			if (data.success) {
-				const newChat = {
-					id: data.chat.id,
-					title: data.chat.title,
-					model: data.chat.model,
-					workspaceDir: data.chat.workspace_dir || "",
-					messages: []
-				};
-				setChats(prev => [newChat, ...prev]);
-				setActiveChatId(newChat.id);
-			}
-		} catch (error) {
-			console.error("Failed to create chat");
-		}
-	};
 
 	const handleDeleteChat = (idToDelete, e) => {
 		e.stopPropagation();
