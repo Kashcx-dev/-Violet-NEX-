@@ -55,6 +55,11 @@ router.patch("/:id", fetchUser, async (req, res) => {
         const { id } = req.params;
         const { title, model, workspace_dir } = req.body;
 
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(id)) {
+            return res.status(400).json({ success: false, error: "Invalid chat ID format" });
+        }
+
         const result = await pool.query(
             "UPDATE chats SET title = COALESCE($1, title), model = COALESCE($2, model), workspace_dir = COALESCE($3, workspace_dir), updated_at = CURRENT_TIMESTAMP WHERE id = $4 AND user_id = $5 RETURNING *",
             [title, model, workspace_dir, id, userId]
@@ -78,6 +83,11 @@ router.get("/:id/messages", fetchUser, async (req, res) => {
         if (!userId) return res.status(401).json({ success: false, error: "Unauthorized" });
 
         const { id } = req.params;
+
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(id)) {
+            return res.status(400).json({ success: false, error: "Invalid chat ID format" });
+        }
 
         // Verify ownership
         const chatCheck = await pool.query("SELECT id FROM chats WHERE id = $1 AND user_id = $2", [id, userId]);

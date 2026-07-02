@@ -175,7 +175,9 @@ function ChatInterface() {
 
 			ws.onclose = () => {
 				console.log("WebSocket Disconnected");
-				wsRef.current = null;
+				if (wsRef.current === ws) {
+					wsRef.current = null;
+				}
 			};
 		}
 		
