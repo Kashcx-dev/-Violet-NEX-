@@ -9,6 +9,7 @@ import {
 import Login from "./components/Login";
 import Signup from "./components/Signup";
 import Dashboard from "./components/Dashboard";
+import Subscription from "./components/Subscription";
 import "./App.css";
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
 			<Router>
 				<Routes>
 					<Route path="/" element={<Dashboard />} />
+					<Route path="/subscription" element={<Subscription />} />
 					<Route path="/login" element={<Login />} />
 					<Route path="/signup" element={<Signup />} />
 					<Route path="*" element={<Navigate to="/login" replace />} />

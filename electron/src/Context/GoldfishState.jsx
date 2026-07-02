@@ -131,21 +131,27 @@ function GoldfishState(props) {
 
 	const getUser = async () => {
 		setLoading(true);
-		const response = await fetch(`${host}/api/user/getuser`, {
-			method: "GET",
-			headers: {
-				"Content-Type": "application/json",
-				"Authorization": `Bearer ${localStorage.getItem("token")}`,
-				"X-Client-Type": "webpage",
-			},
-		});
-		const json = await response.json();
-		if (json.success) {
-			setUser(json.user);
-		} else {
+		try {
+			const response = await fetch(`${host}/api/user/getuser`, {
+				method: "GET",
+				headers: {
+					"Content-Type": "application/json",
+					"Authorization": `Bearer ${localStorage.getItem("token")}`,
+					"X-Client-Type": "app",
+				},
+			});
+			const json = await response.json();
+			if (json.success) {
+				setUser(json.user);
+			} else {
+				setUser(null);
+			}
+		} catch (error) {
+			console.error("getUser error:", error);
 			setUser(null);
+		} finally {
+			setLoading(false);
 		}
-		setLoading(false);
 	};
 
 	// useEffect(() => {
@@ -164,7 +170,7 @@ function GoldfishState(props) {
 				headers: {
 					"Content-Type": "application/json",
 					"Authorization": `Bearer ${localStorage.getItem("token")}`,
-					"X-Client-Type": "webpage",
+					"X-Client-Type": "app",
 				},
 				body: JSON.stringify({ tier }),
 			});

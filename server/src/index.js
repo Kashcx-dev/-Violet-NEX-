@@ -7,6 +7,7 @@ import { WebSocketServer } from "ws";
 import jwt from "jsonwebtoken";
 import middlewareHandler, { authLimiter } from "../middlewares/middlewareHandler.js";
 import authRoutes from "../routes/auth.js";
+import userRoutes from "../routes/user.js";
 import pool from "../middlewares/db.js";
 
 const app = express();
@@ -19,6 +20,7 @@ middlewareHandler(app);
 
 // Routes (with rate limiting on auth)
 app.use("/api/auth", authLimiter, authRoutes);
+app.use("/api/user", userRoutes);
 
 // Health check
 app.get("/api/health", (req, res) => {
@@ -35,6 +37,8 @@ app.use((error, req, res, next) => {
 	console.error(error);
 	res.status(500).json({ success: false, error: error.message });
 });
+
+
 
 // ─── WebSocket Server (for Electron App) ───
 const wss = new WebSocketServer({ server, path: "/ws" });
@@ -66,11 +70,34 @@ wss.on("connection", async (ws, req) => {
 			message: tokenCount <= 0 ? "No tokens remaining" : "Connected to GoldFish Server",
 		}));
 
-		ws.on("message", (data) => {
-			// Future: handle LLM request messages from the Electron app here
-			const msg = JSON.parse(data);
-			// Echo back for now as a placeholder
-			ws.send(JSON.stringify({ type: "ack", received: msg }));
+		ws.on("message", async (data) => {
+			try {
+				const msg = JSON.parse(data);
+				const userPrompt = msg.text;
+				console.log(`Received message from user ${ws.userId}: ${userPrompt}`);
+
+				// TODO: Implement actual Cognee / LLM streaming here later.
+				const mockReply = `I received your prompt: "${userPrompt}". I am GoldFish backend connected via WebSockets.`;
+				
+				// Stream response in chunks
+				const words = mockReply.split(" ");
+				for (let i = 0; i < words.length; i++) {
+					// Check if client is still connected before sending
+					if (ws.readyState !== 1) break; 
+					
+					ws.send(JSON.stringify({ 
+						type: "chat_stream", 
+						chatId: msg.chatId, // Echo back the specific chat tab ID
+						chunk: words[i] + " ",
+						isLast: i === words.length - 1
+					}));
+					
+					// Simulate token generation latency
+					await new Promise(resolve => setTimeout(resolve, 60));
+				}
+			} catch (error) {
+				console.error("WS Message Error:", error);
+			}
 		});
 
 		ws.on("pong", () => { ws.isAlive = true; });

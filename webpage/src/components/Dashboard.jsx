@@ -30,6 +30,7 @@ function Dashboard() {
 		: "—";
 
 	const tokenCount = user?.token_count ?? 0;
+	const displayTokens = Math.max(0, tokenCount);
 	const tokenPercent = Math.min((tokenCount / 1000) * 100, 100);
 
 	return (
@@ -86,7 +87,7 @@ function Dashboard() {
 							<h3 className="text-sm font-medium text-zinc-400">Tokens Remaining</h3>
 						</div>
 						<p className={`font-bold text-3xl mb-2 ${tokenCount <= 0 ? 'text-red-400' : 'text-white'}`}>
-							{tokenCount.toLocaleString()}
+							{displayTokens.toLocaleString()}
 						</p>
 						<div className="w-full bg-zinc-800 rounded-full h-2">
 							<div
@@ -110,7 +111,7 @@ function Dashboard() {
 							<h3 className="text-sm font-medium text-zinc-400">Member Since</h3>
 						</div>
 						<p className="text-white font-semibold text-lg">{memberSince}</p>
-						<p className="text-zinc-500 text-sm mt-1">Free Tier</p>
+						<p className="text-zinc-500 text-sm mt-1 capitalize">{user?.tier || "Free"} Tier</p>
 					</div>
 				</div>
 
@@ -125,8 +126,11 @@ function Dashboard() {
 					<p className="text-zinc-500 text-sm max-w-md mx-auto">
 						Manage your plan, view invoices, and upgrade your token quota. Coming soon.
 					</p>
-					<button className="mt-6 px-6 py-2.5 bg-zinc-800 text-zinc-300 font-medium rounded-xl text-sm hover:bg-zinc-700 transition-all duration-200 cursor-not-allowed opacity-60">
-						Coming Soon
+					<button 
+						onClick={() => navigate("/subscription")}
+						className="mt-6 px-6 py-2.5 bg-zinc-800 text-white font-medium rounded-xl text-sm hover:bg-zinc-700 transition-all duration-200"
+					>
+						View Plans
 					</button>
 				</div>
 			</div>

@@ -236,40 +236,5 @@ router.post("/verify-otp", async (req, res) => {
 	res.status(400).json({ success: false, error: "Invalid OTP" });
 });
 
-// Middleware to fetch user from JWT token
-const fetchuser = (req, res, next) => {
-	const token =
-		req.header("auth-token") ||
-		req.header("Authorization")?.replace("Bearer ", "");
-	if (!token) {
-		return res
-			.status(401)
-			.send({ error: "Please authenticate using a valid token" });
-	}
-	try {
-		const data = jwt.verify(token, JWT_SECRET);
-		req.user = data;
-		next();
-	} catch (error) {
-		res.status(401).send({
-			error: "Please authenticate using a valid token",
-		});
-	}
-};
-
-// Route to get details of logged-in user: GET "/api/auth/getuser"
-router.get("/getuser", fetchuser, async (req, res) => {
-	try {
-		const userId = req.user.id;
-		const user = await pool.query(
-			"SELECT id, name, email, token_count, created_at FROM users WHERE id = $1",
-			[userId],
-		);
-		res.json({ success: true, user: user.rows[0] });
-	} catch (error) {
-		console.error(error.message);
-		res.status(500).json({ success: false, error: "Internal Server Error" });
-	}
-});
 
 export default router;

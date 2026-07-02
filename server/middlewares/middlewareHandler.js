@@ -24,7 +24,19 @@ export const identifyClient = (req, res, next) => {
 export default function middlewareHandler(app) {
 	app.use(
 		cors({
-			origin: process.env.FRONTEND_URL || "http://localhost:5173",
+			origin: function (origin, callback) {
+				const allowedOrigins = [
+					"http://localhost:5173", // Webpage dev
+					"http://localhost:5174", // Electron dev
+					process.env.FRONTEND_URL
+				];
+				// Allow if no origin (Electron file://), or matches allowed localhost/urls
+				if (!origin || origin === 'file://' || origin.startsWith('app://') || allowedOrigins.includes(origin)) {
+					callback(null, true);
+				} else {
+					callback(new Error('Not allowed by CORS'));
+				}
+			},
 			credentials: true,
 			allowedHeaders: ["Content-Type", "Authorization", "X-Client-Type"],
 			methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],

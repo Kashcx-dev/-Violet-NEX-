@@ -8,11 +8,15 @@ function ChatInterface() {
 	const navigate = useNavigate();
 
 	const [showAuthModal, setShowAuthModal] = useState(false);
+	const [showConfigModal, setShowConfigModal] = useState(false);
+	const wsRef = useRef(null);
 
 	useEffect(() => {
 		getUser();
 		//eslint-disable-next-line
 	}, []);
+
+
 
 	const getInitials = (name) => {
 		if (!name) return "GF";
@@ -30,22 +34,77 @@ function ChatInterface() {
 			id: "1",
 			title: "Design System Guidelines",
 			messages: [],
+			model: "gpt-4o",
+			workspaceDir: "",
 		},
 		{
 			id: "2",
 			title: "PostgreSQL Schema Setup",
 			messages: [],
+			model: "gpt-4o",
+			workspaceDir: "",
 		},
 		{
 			id: "3",
 			title: "Vite + Tailwind V4 Config",
 			messages: [],
+			model: "gpt-4o",
+			workspaceDir: "",
 		},
 	]);
 	const [activeChatId, setActiveChatId] = useState("1");
 	const [input, setInput] = useState("");
 	const [isGenerating, setIsGenerating] = useState(false);
 	const messagesEndRef = useRef(null);
+
+	// Setup WebSocket Connection
+	useEffect(() => {
+		const token = localStorage.getItem("token");
+		if (user && token && !wsRef.current) {
+			const ws = new WebSocket(`ws://localhost:3000/ws?token=${token}`);
+			wsRef.current = ws;
+
+			ws.onopen = () => console.log("WebSocket Connected");
+			
+			ws.onmessage = (event) => {
+				const data = JSON.parse(event.data);
+				if (data.type === "ack" || data.type === "connected") return;
+				
+				if (data.type === "chat_stream") {
+					setChats((prevChats) => {
+						const targetChatId = data.chatId; // Use the ID from the server
+						const targetChat = prevChats.find(c => c.id === targetChatId);
+						if (!targetChat) return prevChats;
+						
+						const lastMsg = targetChat.messages[targetChat.messages.length - 1];
+						if (lastMsg && lastMsg.sender === "ai" && !lastMsg.isComplete) {
+							lastMsg.text += data.chunk;
+							if (data.isLast) lastMsg.isComplete = true;
+							setIsGenerating(!data.isLast);
+							return [...prevChats];
+						} else {
+							return prevChats.map(c => c.id === targetChatId ? {
+								...c,
+								messages: [...c.messages, { sender: "ai", text: data.chunk, isComplete: !!data.isLast }]
+							} : c);
+						}
+					});
+				}
+			};
+
+			ws.onclose = () => {
+				console.log("WebSocket Disconnected");
+				wsRef.current = null;
+			};
+		}
+		
+		return () => {
+			if (wsRef.current) {
+				wsRef.current.close();
+				wsRef.current = null;
+			}
+		};
+	}, [user, activeChatId]);
 
 	const activeChat = chats.find((c) => c.id === activeChatId) || chats[0];
 
@@ -85,27 +144,40 @@ function ChatInterface() {
 		setInput("");
 		setIsGenerating(true);
 
-		//Simulate AI stream / reply after a brief timeout
-		setTimeout(() => {
-			setChats((prevChats) =>
-				prevChats.map((chat) => {
-					if (chat.id === activeChatId) {
-						return {
-							...chat,
-							messages: [
-								...chat.messages,
-								{
-									sender: "ai",
-									text: `I've received your prompt: "${messageText}". I am currently working as a mock interface, but I will process this once connected to the backend API!`,
-								},
-							],
-						};
-					}
-					return chat;
-				}),
-			);
-			setIsGenerating(false);
-		}, 1000);
+		// Send via WebSocket if connected
+		if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+			wsRef.current.send(JSON.stringify({ 
+				chatId: activeChatId,
+				text: messageText,
+				model: activeChat.model || "gpt-4o",
+				workspaceDir: activeChat.workspaceDir || "" 
+			}));
+			
+			// Add placeholder AI message that will receive chunks
+			setChats((prev) => prev.map(chat => chat.id === activeChatId ? {
+				...chat,
+				messages: [...chat.messages, { sender: "ai", text: "", isComplete: false }]
+			} : chat));
+		} else {
+			// Fallback mock if disconnected
+			setTimeout(() => {
+				setChats((prevChats) =>
+					prevChats.map((chat) => {
+						if (chat.id === activeChatId) {
+							return {
+								...chat,
+								messages: [
+									...chat.messages,
+									{ sender: "ai", text: "WebSocket disconnected. Reconnect to chat with the AI.", isComplete: true },
+								],
+							};
+						}
+						return chat;
+					}),
+				);
+				setIsGenerating(false);
+			}, 500);
+		}
 	};
 
 	const handleNewChat = () => {
@@ -114,6 +186,8 @@ function ChatInterface() {
 			id: newId,
 			title: "New Chat",
 			messages: [],
+			model: "gpt-4o",
+			workspaceDir: "",
 		};
 		setChats([newChat, ...chats]);
 		setActiveChatId(newId);
@@ -128,7 +202,7 @@ function ChatInterface() {
 		} else if (remaining.length === 0) {
 			//eslint-disable-next-line
 			const newId = String(Date.now());
-			setChats([{ id: newId, title: "New Chat", messages: [] }]);
+			setChats([{ id: newId, title: "New Chat", messages: [], model: "gpt-4o", workspaceDir: "" }]);
 			setActiveChatId(newId);
 		}
 	};
@@ -366,20 +440,15 @@ function ChatInterface() {
 					</div>
 
 					<div className="flex items-center gap-2">
-						{/* Clear Chat option */}
+						{/* Configure Chat */}
 						<button
-							onClick={() => {
-								setChats(
-									chats.map((c) =>
-										c.id === activeChatId
-											? { ...c, messages: [] }
-											: c,
-									),
-								);
-							}}
-							className="text-xs text-zinc-400 hover:text-white px-3 py-1.5 hover:bg-zinc-800 rounded-lg transition cursor-pointer"
+							onClick={() => setShowConfigModal(true)}
+							className="text-xs text-zinc-400 hover:text-white px-3 py-1.5 hover:bg-zinc-800 rounded-lg transition cursor-pointer flex items-center gap-1.5"
 						>
-							Clear Thread
+							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+								<path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+							</svg>
+							Configure
 						</button>
 					</div>
 				</div>
@@ -631,6 +700,55 @@ function ChatInterface() {
 								className="w-full py-2.5 text-zinc-500 hover:text-zinc-300 font-medium text-xs transition duration-150 cursor-pointer"
 							>
 								Cancel
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+			{showConfigModal && (
+				<div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
+					<div className="bg-[#18181b] border border-zinc-800 rounded-3xl p-8 w-full max-w-md shadow-2xl space-y-6 animate-in fade-in zoom-in duration-200">
+						<div className="flex items-center justify-between mb-2">
+							<h3 className="text-lg font-bold text-white tracking-wide">
+								Chat Configuration
+							</h3>
+							<button onClick={() => setShowConfigModal(false)} className="text-zinc-500 hover:text-white transition">
+								<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+							</button>
+						</div>
+						<div className="space-y-4">
+							<div className="space-y-2">
+								<label className="text-xs font-medium text-zinc-400 block">AI Model</label>
+								<select 
+									value={activeChat?.model || "gpt-4o"}
+									onChange={(e) => setChats(chats.map(c => c.id === activeChatId ? { ...c, model: e.target.value } : c))}
+									className="w-full px-4 py-2.5 bg-[#242427] border border-zinc-700 rounded-xl text-white text-sm focus:outline-none focus:border-zinc-500"
+								>
+									<option value="gpt-4o">GPT-4 Omni</option>
+									<option value="gpt-4-turbo">GPT-4 Turbo</option>
+									<option value="claude-3-opus">Claude 3 Opus</option>
+									<option value="claude-3-sonnet">Claude 3 Sonnet</option>
+									<option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+								</select>
+							</div>
+							<div className="space-y-2">
+								<label className="text-xs font-medium text-zinc-400 block">Workspace Directory Path</label>
+								<input 
+									type="text"
+									placeholder="C:\Projects\MyApp"
+									value={activeChat?.workspaceDir || ""}
+									onChange={(e) => setChats(chats.map(c => c.id === activeChatId ? { ...c, workspaceDir: e.target.value } : c))}
+									className="w-full px-4 py-2.5 bg-[#242427] border border-zinc-700 rounded-xl text-white text-sm focus:outline-none focus:border-zinc-500 placeholder-zinc-600"
+								/>
+								<p className="text-[10px] text-zinc-500">The AI will use this directory for Cognee local parsing and execution.</p>
+							</div>
+						</div>
+						<div className="pt-2">
+							<button
+								onClick={() => setShowConfigModal(false)}
+								className="w-full py-3 bg-white text-black font-semibold rounded-xl hover:bg-zinc-200 active:scale-[0.98] transition-all duration-150 cursor-pointer text-sm"
+							>
+								Save Configuration
 							</button>
 						</div>
 					</div>
