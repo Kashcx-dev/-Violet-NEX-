@@ -237,13 +237,18 @@ function ChatInterface() {
 				setChats((prevChats) =>
 					prevChats.map((chat) => {
 						if (chat.id === activeChatId) {
-							return {
-								...chat,
-								messages: [
-									...chat.messages,
-									{ sender: "ai", text: "WebSocket disconnected. Reconnect to chat with the AI.", isComplete: true },
-								],
-							};
+							const newMessages = [...chat.messages];
+							const lastMsgIndex = newMessages.length - 1;
+							const lastMsg = newMessages[lastMsgIndex];
+							
+							if (lastMsg && lastMsg.sender === "ai" && !lastMsg.isComplete) {
+								newMessages[lastMsgIndex] = {
+									...lastMsg,
+									text: "Error: WebSocket disconnected. Reconnect to chat with the AI.",
+									isComplete: true
+								};
+							}
+							return { ...chat, messages: newMessages };
 						}
 						return chat;
 					}),
