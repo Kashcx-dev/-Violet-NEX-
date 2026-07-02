@@ -85,7 +85,8 @@ function ChatInterface() {
 					setChats(formattedChats);
 					setActiveChatId(formattedChats[0].id);
 				} else {
-					handleNewChat();
+					setChats([]);
+					setActiveChatId(null);
 				}
 			} catch (error) {
 				console.error("Failed to load chats");
@@ -211,10 +212,8 @@ function ChatInterface() {
 		// Single state update for user message and AI placeholder
 		setChats(prevChats => prevChats.map(chat => {
 			if (chat.id === activeChatId) {
-				const newTitle = chat.messages.length === 0 ? messageText.substring(0, 30) + (messageText.length > 30 ? "..." : "") : chat.title;
 				return {
 					...chat,
-					title: newTitle,
 					messages: [
 						...chat.messages,
 						{ sender: "user", text: messageText, isComplete: true },
@@ -271,10 +270,7 @@ function ChatInterface() {
 		if (activeChatId === idToDelete && remaining.length > 0) {
 			setActiveChatId(remaining[0].id);
 		} else if (remaining.length === 0) {
-			//eslint-disable-next-line
-			const newId = String(Date.now());
-			setChats([{ id: newId, title: "New Chat", messages: [], model: "gpt-4o", workspaceDir: "" }]);
-			setActiveChatId(newId);
+			setActiveChatId(null);
 		}
 	};
 
