@@ -9,6 +9,8 @@ function ChatInterface() {
 
 	const [showAuthModal, setShowAuthModal] = useState(false);
 	const [showConfigModal, setShowConfigModal] = useState(false);
+	const [showNewChatModal, setShowNewChatModal] = useState(false);
+	const [newChatConfig, setNewChatConfig] = useState({ title: "New Project", workspaceDir: window.process?.cwd() || "" });
 	const wsRef = useRef(null);
 
 	useEffect(() => {
@@ -35,14 +37,14 @@ function ChatInterface() {
 	const [isGenerating, setIsGenerating] = useState(false);
 	const messagesEndRef = useRef(null);
 
-	const handleNewChat = async () => {
+	const handleNewChat = async (title = "New Chat", workspaceDir = "") => {
 		const token = localStorage.getItem("token");
 		if (!token) return;
 		try {
 			const res = await fetch("http://localhost:3000/api/chats", {
 				method: "POST",
 				headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-				body: JSON.stringify({ title: "New Chat", model: "gpt-4o" })
+				body: JSON.stringify({ title, model: "gpt-4o", workspace_dir: workspaceDir })
 			});
 			const data = await res.json();
 			if (data.success) {
@@ -55,6 +57,7 @@ function ChatInterface() {
 				};
 				setChats(prev => [newChat, ...prev]);
 				setActiveChatId(newChat.id);
+				setShowNewChatModal(false);
 			}
 		} catch (error) {
 			console.error("Failed to create chat");
@@ -309,7 +312,10 @@ function ChatInterface() {
 				{/* Header Actions */}
 				<div className="p-3 flex items-center justify-between gap-2 shrink-0">
 					<button
-						onClick={handleNewChat}
+						onClick={() => {
+							setNewChatConfig({ title: "New Project", workspaceDir: window.process?.cwd() || "" });
+							setShowNewChatModal(true);
+						}}
 						className="flex-1 flex items-center justify-between px-3 py-2 bg-zinc-850 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-sm font-medium transition duration-200 cursor-pointer active:scale-[0.98]"
 					>
 						<span className="flex items-center gap-2">
@@ -819,6 +825,65 @@ function ChatInterface() {
 								Save Configuration
 							</button>
 						</div>
+					</div>
+				</div>
+			)}
+			
+			{/* New Chat Modal */}
+			{showNewChatModal && (
+				<div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
+					<div className="bg-[#18181b] border border-zinc-800 rounded-3xl p-8 w-full max-w-md shadow-2xl space-y-6 animate-in fade-in zoom-in duration-200">
+						<div className="flex items-center justify-between mb-2">
+							<h3 className="text-lg font-bold text-white tracking-wide">
+								Create New Chat
+							</h3>
+							<button onClick={() => setShowNewChatModal(false)} className="text-zinc-500 hover:text-white transition">
+								<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+							</button>
+						</div>
+						<form onSubmit={(e) => {
+							e.preventDefault();
+							handleNewChat(newChatConfig.title, newChatConfig.workspaceDir);
+						}} className="space-y-4">
+							<div className="space-y-2">
+								<label className="text-xs font-medium text-zinc-400 block">Chat Title</label>
+								<input 
+									type="text"
+									value={newChatConfig.title}
+									onChange={(e) => setNewChatConfig({ ...newChatConfig, title: e.target.value })}
+									placeholder="e.g. My Next.js Project"
+									className="w-full px-4 py-2.5 bg-[#242427] border border-zinc-700 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500 transition"
+									required
+								/>
+							</div>
+							<div className="space-y-2">
+								<label className="text-xs font-medium text-zinc-400 block">Workspace Directory</label>
+								<input 
+									type="text"
+									value={newChatConfig.workspaceDir}
+									onChange={(e) => setNewChatConfig({ ...newChatConfig, workspaceDir: e.target.value })}
+									placeholder="C:\Projects\MyProject"
+									className="w-full px-4 py-2.5 bg-[#242427] border border-zinc-700 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500 transition"
+								/>
+								<p className="text-[10px] text-zinc-500 mt-1">Optional. The folder where GoldFish can read and edit code files.</p>
+							</div>
+							
+							<div className="pt-4 flex items-center justify-end gap-3 border-t border-zinc-800/60">
+								<button
+									type="button"
+									onClick={() => setShowNewChatModal(false)}
+									className="px-4 py-2 text-zinc-400 hover:text-white text-sm font-medium transition cursor-pointer"
+								>
+									Cancel
+								</button>
+								<button
+									type="submit"
+									className="px-6 py-2 bg-emerald-500 hover:bg-emerald-400 text-black text-sm font-bold rounded-xl transition shadow-lg cursor-pointer"
+								>
+									Create Chat
+								</button>
+							</div>
+						</form>
 					</div>
 				</div>
 			)}
