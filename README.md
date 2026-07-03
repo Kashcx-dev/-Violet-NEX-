@@ -6,25 +6,54 @@ Violet is a production-ready, hyper-personalized AI assistant featuring persiste
 
 ## Architecture Overview
 
+Violet is built as a centralized tree-based ecosystem where the Node.js Gateway Server acts as the core coordinator:
+
 ```mermaid
 graph TD
-    A[Electron UI Frontend] <-->|HTTP/WS| B[Node.js Gateway Server]
-    B <-->|WebSockets| C[Python Cognee Service]
-    C <-->|cognee.serve| D[Cognee Cloud AWS Graph Store]
+    B[Node.js Gateway Server] <--> A[Violet Desktop App Frontend]
+    B <--> E[Standalone Web Dashboard Frontend]
+    B <--> C[Python Cognee Service Backend]
+    C <--> D[Cognee Cloud AWS Graph Store]
 ```
 
-- **Frontend (Electron/React):** A premium desktop chat interface that connects to the server and handles real-time message streaming.
-- **Gateway (Node.js/Express):** Manages user authentication, PostgreSQL databases, and forwards WebSocket messages.
-- **Python Cognee Service (FastAPI):** Orchestrates intent routing, coordinates agentic tools, and serves as the bridge to Cognee Cloud.
+- **Violet Desktop App (Frontend):** A premium desktop chat interface that connects to the server and handles real-time message streaming.
+- **Standalone Web Dashboard (Frontend):** A secondary React + Vite web dashboard for managing user accounts, sign-ups, and chat threads directly in the browser.
+- **Gateway (Node.js/Express):** The central hub of the application. Manages user authentication, PostgreSQL database storage, and forwards real-time messages over WebSockets between all frontends and backends.
+- **Python Cognee Service (Backend):** Orchestrates intent routing, coordinates agentic tools, and serves as the bridge to Cognee Cloud.
 - **Cognee Cloud:** Acts as the brain of the assistant. By offloading text document ingestion to Cognee Cloud's AWS engine, we construct complex semantic memory graphs asynchronously, completely bypassing local API rate-limit bottlenecks.
+
+---
+
+## How We Built It & Challenges Faced
+
+### The API Rate-Limit Trap (The Local Graph Challenge)
+Initially, we attempted to parse local workspaces and build semantic knowledge graphs locally. However, doing parallel parsing, tokenization, and embedding generation locally hammered our LLM API key. We hit immediate `HTTP 429` (Too Many Requests) rate limit restrictions. 
+
+### The Solution: Transitioning to Cognee Cloud
+To resolve the API bottlenecks, we pivoted to a hybrid architecture leveraging **Cognee Cloud**. 
+- Whenever a user requests Violet to "remember" or ingest a workspace, we extract the text locally and stream it asynchronously to Cognee Cloud via `cognee.remember()`.
+- Cognee Cloud processes the text, performs entity extraction, and updates the knowledge graph on their AWS infrastructure.
+- The local Python service requests a recall search via `cognee.recall()` when a user asks a question, which returns `GRAPH_COMPLETION` semantic summaries.
+- This lets us run all conversational interactions in a single-pass stream, bypassing local token processing bottlenecks and keeping the UI fast and responsive.
+
+### Designing Streamed Tool Calling
+We built a custom two-pass agentic execution pipeline. In the first pass, we check if the user query needs to execute local tools (creating files, deleting files, fetching system time, or performing web searches). The backend executes the tools and feeds the results back to the LLM. In the second pass, the LLM streams the final conversational text back to the frontend, maintaining a smooth, real-time typing effect.
 
 ---
 
 ## Configuration Requirements (.env)
 
-The project consists of two key configuration zones. Please set up the `.env` files in their respective folders as described below:
+Set up the `.env` files in their respective folders as described below:
 
-### 1. Python Cognee Service (`python_service/.env`)
+### 1. Violet Desktop App & Standalone Webpage (`webpage/.env`)
+
+Configure the location of the running Node.js Gateway.
+
+```ini
+VITE_BACKEND_HOST="http://localhost:3000"
+```
+
+### 2. Python Cognee Service (`python_service/.env`)
 
 Configure the local LLM routing parameters and internal Cognee setups.
 
@@ -46,7 +75,7 @@ ENABLE_BACKEND_ACCESS_CONTROL=false
 
 *Note: The tenant database credentials (Cognee serve endpoints and API keys) are connected inside the `main.py` lifecycle startup event.*
 
-### 2. Node.js Gateway Server (`server/.env`)
+### 3. Node.js Gateway Server (`server/.env`)
 
 Configure the gateway routing, database configuration, and OTP email dispatch.
 
@@ -76,3 +105,4 @@ APP_EMAIL_PASSWORD=your-app-specific-email-password
 1. **Persistent Memory Graph (Cognee Cloud):** Violet remembers documents and details across multiple conversation threads using AWS-backed graph completions.
 2. **Proactive Agentic Tools:** Violet can run live Web Searches, fetch the local System Clock, and dynamically Create or Delete files in your active workspace directory.
 3. **Decisive Personality:** Violet acts as a true executive assistant, giving clear, concrete choices and avoiding boilerplate AI disclaimers.
+
