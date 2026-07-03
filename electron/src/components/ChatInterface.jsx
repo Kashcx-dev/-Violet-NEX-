@@ -137,7 +137,12 @@ function ChatInterface() {
 				const data = JSON.parse(event.data);
 				if (data.type === "ack" || data.type === "connected") return;
 				
-				if (data.type === "chat_stream") {
+				if (data.type === "system_event") {
+					setChats((prevChats) => prevChats.map(c => {
+						if (c.id !== data.chatId) return c;
+						return { ...c, messages: [...c.messages, { sender: "system", text: data.text, isComplete: true }] };
+					}));
+				} else if (data.type === "chat_stream") {
 					setChats((prevChats) => prevChats.map(c => {
 						if (c.id !== data.chatId) return c;
 						
@@ -148,11 +153,11 @@ function ChatInterface() {
 						if (lastMsg && lastMsg.sender === "ai" && !lastMsg.isComplete) {
 							newMessages[lastMsgIndex] = {
 								...lastMsg,
-								text: lastMsg.text + data.chunk,
+								text: (lastMsg.text || "") + (data.chunk || ""),
 								isComplete: !!data.isLast
 							};
-						} else if (lastMsg && lastMsg.sender === "user") {
-							newMessages.push({ sender: "ai", text: data.chunk, isComplete: !!data.isLast });
+						} else {
+							newMessages.push({ sender: "ai", text: (data.chunk || ""), isComplete: !!data.isLast });
 						}
 						return { ...c, messages: newMessages };
 					}));
@@ -263,8 +268,19 @@ function ChatInterface() {
 	};
 
 
-	const handleDeleteChat = (idToDelete, e) => {
+	const handleDeleteChat = async (idToDelete, e) => {
 		e.stopPropagation();
+		const token = localStorage.getItem("token");
+		if (token) {
+			try {
+				await fetch(`http://localhost:3000/api/chats/${idToDelete}`, {
+					method: "DELETE",
+					headers: { "Authorization": `Bearer ${token}` }
+				});
+			} catch (error) {
+				console.error("Failed to delete chat from server:", error);
+			}
+		}
 		const remaining = chats.filter((c) => c.id !== idToDelete);
 		setChats(remaining);
 		if (activeChatId === idToDelete && remaining.length > 0) {
@@ -427,10 +443,10 @@ function ChatInterface() {
 								</div>
 								<div className="flex flex-col overflow-hidden">
 									<span className="text-xs font-semibold text-white leading-none truncate">
-										{user?.name || "Goldfish User"}
+										{user?.name || "Violet User"}
 									</span>
 									<span className="text-[10px] text-zinc-500 truncate mt-1">
-										{user?.email || "user@goldfish.ai"}
+										{user?.email || "user@violet.ai"}
 									</span>
 								</div>
 							</div>
@@ -505,7 +521,7 @@ function ChatInterface() {
 						)}
 						<span className="font-semibold text-white tracking-wide flex items-center gap-2 text-sm bg-zinc-800/40 border border-zinc-800 px-3 py-1 rounded-full">
 							<span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-							Goldfish v1.0
+							Violet - the next gen AI
 						</span>
 					</div>
 
@@ -556,7 +572,7 @@ function ChatInterface() {
 									How can I help you today?
 								</h1>
 								<p className="text-sm text-zinc-400 max-w-md mx-auto">
-									Ask Goldfish to write schemas, refactor routes,
+									Ask Violet to write schemas, refactor routes,
 									create interactive components, or explain code
 									concepts.
 								</p>
@@ -583,9 +599,16 @@ function ChatInterface() {
 					) : (
 						// MESSAGE LIST
 						<div className="max-w-3xl mx-auto space-y-6">
-							{activeChat.messages.map((msg, idx) => (
+							{activeChat.messages.map((msg, index) => (
+								msg.sender === "system" ? (
+									<div key={index} className="w-full flex justify-center my-4 animate-in fade-in zoom-in duration-300">
+										<span className="text-[11px] italic text-zinc-500 font-medium tracking-wide">
+											{msg.text}
+										</span>
+									</div>
+								) : (
 								<div
-									key={idx}
+									key={index}
 									className={`flex gap-4 ${
 										msg.sender === "user"
 											? "justify-end"
@@ -632,6 +655,7 @@ function ChatInterface() {
 										</div>
 									)}
 								</div>
+								)
 							))}
 
 							{/* Loading Stream effect */}
@@ -688,7 +712,7 @@ function ChatInterface() {
 									}
 								}}
 								rows={1}
-								placeholder="Message Goldfish..."
+								placeholder="Message Violet..."
 								className="flex-1 max-h-48 py-2 px-3 bg-transparent text-sm text-white placeholder-zinc-500 focus:outline-none resize-none align-bottom scrollbar-none"
 								style={{ height: "auto" }}
 							/>
@@ -715,7 +739,7 @@ function ChatInterface() {
 							</button>
 						</form>
 						<p className="text-[10px] text-zinc-500 text-center mt-2 tracking-wide">
-							Goldfish can make mistakes. Consider checking important
+							Violet can make mistakes. Consider checking important
 							info.
 						</p>
 					</div>
@@ -861,7 +885,7 @@ function ChatInterface() {
 									placeholder="C:\Projects\MyProject"
 									className="w-full px-4 py-2.5 bg-[#242427] border border-zinc-700 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500 transition"
 								/>
-								<p className="text-[10px] text-zinc-500 mt-1">Optional. The folder where GoldFish can read and edit code files.</p>
+								<p className="text-[10px] text-zinc-500 mt-1">Optional. The folder where Violet can read and edit code files.</p>
 							</div>
 							
 							<div className="pt-4 flex items-center justify-end gap-3 border-t border-zinc-800/60">

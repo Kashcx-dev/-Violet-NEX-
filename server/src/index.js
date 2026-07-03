@@ -42,48 +42,59 @@ app.use((error, req, res, next) => {
 
 
 
-// ─── Python Microservice WebSocket Client ───
-const pythonWs = new WebSocket("ws://localhost:8000/ws/cognee");
+// ─── Python Microservice WebSocket Client (Auto-Reconnecting) ───
+let pythonWs = null;
 const activeChats = new Map(); // Maps chatId -> Electron WebSocket client
 const aiResponseBuffer = new Map(); // Maps chatId -> accumulated response string
 
-pythonWs.on("open", () => {
-	console.log("Connected to Python Cognee Service!");
-});
+function connectToPython() {
+	pythonWs = new WebSocket("ws://127.0.0.1:8000/ws/cognee");
 
-pythonWs.on("message", async (data) => {
-	try {
-		const payload = JSON.parse(data);
-		const { chatId, chunk, isLast } = payload;
-		
-		const clientWs = activeChats.get(chatId);
-		if (clientWs && clientWs.readyState === 1) {
-			clientWs.send(JSON.stringify({ type: "chat_stream", chatId, chunk, isLast }));
+	pythonWs.on("open", () => {
+		console.log("Connected to Python Cognee Service!");
+	});
+
+	pythonWs.on("message", async (data) => {
+		try {
+			const payload = JSON.parse(data);
+			const { chatId, chunk, isLast } = payload;
+			
+			const clientWs = activeChats.get(chatId);
+			if (clientWs && clientWs.readyState === 1) {
+				clientWs.send(JSON.stringify({ type: "chat_stream", chatId, chunk, isLast }));
+			}
+
+			// Buffer AI response to save to DB when finished
+			let currentStr = aiResponseBuffer.get(chatId) || "";
+			currentStr += chunk;
+			aiResponseBuffer.set(chatId, currentStr);
+
+			if (isLast) {
+				const finalText = currentStr.trim();
+				// Save AI message to DB
+				await pool.query(
+					"INSERT INTO conversations (chat_id, sender, text) VALUES ($1, $2, $3)",
+					[chatId, "ai", finalText]
+				);
+				aiResponseBuffer.delete(chatId);
+				activeChats.delete(chatId);
+			}
+		} catch (error) {
+			console.error("Error handling Python WS message:", error);
 		}
+	});
 
-		// Buffer AI response to save to DB when finished
-		let currentStr = aiResponseBuffer.get(chatId) || "";
-		currentStr += chunk;
-		aiResponseBuffer.set(chatId, currentStr);
+	pythonWs.on("error", (error) => {
+		console.error("Python WS Error:", error.message);
+	});
 
-		if (isLast) {
-			const finalText = currentStr.trim();
-			// Save AI message to DB
-			await pool.query(
-				"INSERT INTO conversations (chat_id, sender, text) VALUES ($1, $2, $3)",
-				[chatId, "ai", finalText]
-			);
-			aiResponseBuffer.delete(chatId);
-			activeChats.delete(chatId);
-		}
-	} catch (error) {
-		console.error("Error handling Python WS message:", error);
-	}
-});
+	pythonWs.on("close", () => {
+		console.log("Python WS disconnected. Reconnecting in 3s...");
+		setTimeout(connectToPython, 3000);
+	});
+}
 
-pythonWs.on("error", (error) => {
-	console.error("Python WS Connection Error (Is FastAPI running?):", error.message);
-});
+connectToPython();
 
 // ─── WebSocket Server (for Electron App) ───
 const wss = new WebSocketServer({ server, path: "/ws" });

@@ -110,4 +110,32 @@ router.get("/:id/messages", fetchUser, async (req, res) => {
     }
 });
 
+// Delete a chat and its conversations
+router.delete("/:id", fetchUser, async (req, res) => {
+    try {
+        const userId = req.user?.id;
+        if (!userId) return res.status(401).json({ success: false, error: "Unauthorized" });
+
+        const { id } = req.params;
+
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(id)) {
+            return res.status(400).json({ success: false, error: "Invalid chat ID format" });
+        }
+
+        // Delete conversations first (foreign key), then the chat
+        await pool.query("DELETE FROM conversations WHERE chat_id = $1", [id]);
+        const result = await pool.query("DELETE FROM chats WHERE id = $1 AND user_id = $2 RETURNING id", [id, userId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, error: "Chat not found" });
+        }
+
+        res.json({ success: true, message: "Chat deleted" });
+    } catch (error) {
+        console.error("Error deleting chat:", error);
+        res.status(500).json({ success: false, error: "Server error" });
+    }
+});
+
 export default router;
