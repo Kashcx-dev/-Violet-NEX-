@@ -21,7 +21,13 @@ router.post(
 	[
 		body("name", "Enter a valid name").isLength({ min: 3 }),
 		body("email", "Enter a valid mail").isEmail(),
-		body("password", "Password must be of 8 characters").isLength({ min: 8 }),
+		body("password", "Password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a number, and a symbol").isStrongPassword({
+			minLength: 8,
+			minLowercase: 1,
+			minUppercase: 1,
+			minNumbers: 1,
+			minSymbols: 1,
+		}),
 	],
 	async (req, res) => {
 		const errors = validationResult(req);

@@ -30,8 +30,14 @@ function Dashboard() {
 		: "—";
 
 	const tokenCount = user?.token_count ?? 0;
+	
+	// Determine the max token limit based on user tier
+	let maxTokens = 1000;
+	if (user?.tier === "pro") maxTokens = 2000;
+	if (user?.tier === "elite") maxTokens = 6000;
+	
 	const displayTokens = Math.max(0, tokenCount);
-	const tokenPercent = Math.min((tokenCount / 1000) * 100, 100);
+	const tokenPercent = Math.min((tokenCount / maxTokens) * 100, 100);
 
 	return (
 		<div className="min-h-screen bg-[#09090b] text-[#f4f4f5] p-6 selection:bg-white selection:text-black">
@@ -46,7 +52,7 @@ function Dashboard() {
 							<h1 className="text-lg font-semibold text-white">
 								Welcome back, {user?.name || "User"}
 							</h1>
-							<p className="text-xs text-zinc-500">GoldFish Dashboard</p>
+							<p className="text-xs text-zinc-500">Violet Dashboard</p>
 						</div>
 					</div>
 					<button
@@ -87,7 +93,7 @@ function Dashboard() {
 							<h3 className="text-sm font-medium text-zinc-400">Tokens Remaining</h3>
 						</div>
 						<p className={`font-bold text-3xl mb-2 ${tokenCount <= 0 ? 'text-red-400' : 'text-white'}`}>
-							{displayTokens.toLocaleString()}
+							{displayTokens.toLocaleString()} <span className="text-sm font-normal text-zinc-500">/ {maxTokens.toLocaleString()}</span>
 						</p>
 						<div className="w-full bg-zinc-800 rounded-full h-2">
 							<div
@@ -112,6 +118,56 @@ function Dashboard() {
 						</div>
 						<p className="text-white font-semibold text-lg">{memberSince}</p>
 						<p className="text-zinc-500 text-sm mt-1 capitalize">{user?.tier || "Free"} Tier</p>
+					</div>
+				</div>
+
+				{/* Token Analytics Graph */}
+				<div className="bg-[#18181b] border border-zinc-800 rounded-2xl p-8 mb-8">
+					<div className="flex items-center justify-between mb-6">
+						<div>
+							<h3 className="text-lg font-semibold text-white">Usage Analytics</h3>
+							<p className="text-sm text-zinc-500">Tokens consumed over the last 7 days</p>
+						</div>
+						<div className="text-right">
+							<p className="text-2xl font-bold text-amber-400">
+								{Math.max(0, maxTokens - tokenCount).toLocaleString()}
+							</p>
+							<p className="text-xs text-zinc-500">Total Used</p>
+						</div>
+					</div>
+
+					{/* 7-Day Bar Chart */}
+					<div className="h-48 w-full flex items-end justify-between gap-2 pt-4">
+						{[...Array(7)].map((_, i) => {
+							const isToday = i === 6;
+							const tokensUsed = isToday ? Math.max(0, maxTokens - tokenCount) : 0;
+							
+							// Calculate height percentage (max maxTokens for scale)
+							let heightPercent = (tokensUsed / maxTokens) * 100;
+							if (heightPercent > 100) heightPercent = 100;
+							// Give it a tiny minimum height so it's visible even at 0
+							const displayHeight = Math.max(heightPercent, 2);
+
+							return (
+								<div key={i} className="flex-1 flex flex-col items-center justify-end h-full group relative">
+									{/* Tooltip */}
+									<div className="absolute -top-8 bg-zinc-800 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10">
+										{tokensUsed.toLocaleString()}
+									</div>
+									
+									{/* Bar */}
+									<div 
+										className={`w-full rounded-t-sm transition-all duration-500 ${isToday && tokensUsed > 0 ? 'bg-gradient-to-t from-orange-600 to-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)]' : 'bg-zinc-800'}`}
+										style={{ height: `${displayHeight}%` }}
+									></div>
+									
+									{/* Label */}
+									<div className="text-[10px] text-zinc-500 mt-2">
+										{isToday ? 'Today' : `Day ${i+1}`}
+									</div>
+								</div>
+							);
+						})}
 					</div>
 				</div>
 

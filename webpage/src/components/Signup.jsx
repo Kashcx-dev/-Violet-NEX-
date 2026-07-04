@@ -16,10 +16,25 @@ function Signup() {
 	const [error, setError] = useState(null);
 	const [requires2FA, setRequires2FA] = useState(false);
 	const [otp, setOtp] = useState("");
+	const [passwordStrength, setPasswordStrength] = useState(0);
+
+	const calculateStrength = (pass) => {
+		let score = 0;
+		if (!pass) return score;
+		if (pass.length >= 8) score += 1;
+		if (/[a-z]/.test(pass)) score += 1;
+		if (/[A-Z]/.test(pass)) score += 1;
+		if (/\d/.test(pass)) score += 1;
+		if (/[^a-zA-Z\d]/.test(pass)) score += 1;
+		return score;
+	};
 
 	const handleChange = (e) => {
 		const { name, value } = e.target;
 		setFormData((prev) => ({ ...prev, [name]: value }));
+		if (name === "password") {
+			setPasswordStrength(calculateStrength(value));
+		}
 	};
 
 	const handleSubmit = async (e) => {
@@ -173,6 +188,48 @@ function Signup() {
 								required
 								disabled={loading}
 							/>
+							{formData.password && (
+								<div className="mt-2 space-y-1.5">
+									<div className="flex gap-1 h-1.5">
+										{[...Array(5)].map((_, i) => (
+											<div
+												key={i}
+												className={`h-full flex-1 rounded-full transition-colors duration-300 ${
+													i < passwordStrength
+														? passwordStrength <= 2
+															? "bg-red-500"
+															: passwordStrength <= 4
+															? "bg-yellow-500"
+															: "bg-green-500"
+														: "bg-zinc-800"
+												}`}
+											/>
+										))}
+									</div>
+									<div className="text-[10px] font-medium tracking-wide flex justify-between px-1">
+										<span
+											className={`${
+												passwordStrength <= 2
+													? "text-red-500"
+													: passwordStrength <= 4
+													? "text-yellow-500"
+													: "text-green-500"
+											}`}
+										>
+											{passwordStrength === 1 && "Very Weak"}
+											{passwordStrength === 2 && "Weak"}
+											{passwordStrength === 3 && "Fair"}
+											{passwordStrength === 4 && "Strong"}
+											{passwordStrength === 5 && "Very Strong"}
+										</span>
+										{passwordStrength < 5 && (
+											<span className="text-zinc-500">
+												Add uppercase, number, & symbol
+											</span>
+										)}
+									</div>
+								</div>
+							)}
 						</div>
 						<div className="space-y-2">
 							<label
@@ -197,7 +254,7 @@ function Signup() {
 
 						<button
 							type="submit"
-							disabled={loading}
+							disabled={loading || (formData.password.length > 0 && passwordStrength < 5)}
 							className="w-full mt-6 py-3 px-4 bg-white text-black font-semibold rounded-xl hover:bg-zinc-200 active:scale-[0.98] transition-all duration-200 text-sm shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							{loading ? "Signing Up..." : "Sign Up"}

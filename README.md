@@ -41,6 +41,18 @@ We built a custom two-pass agentic execution pipeline. In the first pass, we che
 
 ---
 
+## Desktop Build & Installation (.exe)
+
+Violet includes a pre-configured packaging pipeline using `electron-builder` to compile the desktop client into a standalone Windows executable and installer:
+
+- **Build Command:** Run `npm run electron:build` inside the `electron/` directory.
+- **Standalone Installer:** Located at `electron/release/Violet Setup 0.0.0.exe` (Double-click to install).
+- **Portable Unpacked Executable:** Located at `electron/release/win-unpacked/Violet.exe` (Run directly to launch without installation).
+
+*Note: The Windows installer and binary are packaged with custom multi-resolution `.ico` icon assets generated from Violet's official branding.*
+
+---
+
 ## Configuration Requirements (.env)
 
 Set up the `.env` files in their respective folders as described below:
