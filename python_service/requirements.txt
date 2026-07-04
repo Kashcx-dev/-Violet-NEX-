@@ -5,3 +5,4 @@ cognee
 openai
 python-dotenv
 transformers
+duckduckgo-search
